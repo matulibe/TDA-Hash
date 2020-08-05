@@ -15,7 +15,7 @@
 #define MAX_CARGA 75
 
 typedef struct elemento{
-    char* patente;
+    char* clave;
     void* despcripcion;
 }ele_t;
 
@@ -66,11 +66,11 @@ hash_t* hash_crear(hash_destruir_dato_t destruir_elemento, size_t capacidad){
  * cual se tiene que insertar o esta el elemento de dicha
  * clave
  */
-int hasher(const char* clave, hash_t* hash){
+size_t hasheador(const char* clave){
     size_t numero = 0;
     for (int i = 0; i < strlen(clave); i++)
-        numero += clave[i]*(i+1);
-    return numero % hash->capacidad;
+        numero += (size_t)(clave[i]*(i+1));
+    return numero;
 }
 
 ele_t* crear_elemento(const char* clave, void* elemento){
@@ -78,12 +78,12 @@ ele_t* crear_elemento(const char* clave, void* elemento){
     if(!aux)
         return NULL;
     aux->despcripcion = elemento;
-    aux->patente = malloc(strlen(clave)+1);
-    if(!aux->patente){
+    aux->clave = malloc(strlen(clave)+1);
+    if(!aux->clave){
         free(aux);
         return NULL;
     }
-    strcpy(aux->patente, clave);
+    strcpy(aux->clave, clave);
     return aux;
 }
 
@@ -102,7 +102,7 @@ ele_t* buscar_elemento(lista_t* lista, const char* clave, int* posicion){
     int i = 0;
     while (lista_iterador_tiene_siguiente(iterador) && !encontrado){
         aux = (ele_t*)lista_iterador_siguiente(iterador);
-        if (strcmp(clave, aux->patente) == IGUAL)
+        if (strcmp(clave, aux->clave) == IGUAL)
             encontrado = true;
         i++;
     }
@@ -126,14 +126,12 @@ size_t calcular_carga(hash_t* hash){
  * Devolvera un nuevo vector de listas ya hasheado con mas capacidad la cual sera
  * el numero primo mas cercano al doble de la capacidad original
  */
-vector_t* rehash(hash_t* hash){
-
-}
+vector_t* rehash(hash_t* hash);
 
 int hash_insertar(hash_t* hash, const char* clave, void* elemento){
     if(!hash || !clave || !elemento)
         return ERROR;
-    int pos = hashing(clave);
+    size_t pos = (hasheador(clave)%hash->capacidad);
     if(!hash->vector[pos].lista){
         lista_t* aux= lista_crear();
         if(!aux)
@@ -154,11 +152,11 @@ int hash_quitar(hash_t *hash, const char *clave){
     if(!hash || !clave)
         return ERROR;
     int retorno = EXITO, pos_lista;
-    int pos = hashing(clave);
+    size_t pos = (hasheador(clave) % hash->capacidad);
     if (lista_vacia(hash->vector[pos].lista))
         return ERROR;
     ele_t* aux = buscar_elemento(hash->vector[pos].lista, clave, &pos_lista);
-    free(aux->patente);
+    free(aux->clave);
     hash->destructor(aux);
     retorno = lista_borrar_de_posicion(hash->vector[pos].lista, (size_t)pos_lista);
     if(retorno == ERROR)
@@ -202,7 +200,7 @@ void hash_destruir(hash_t *hash){
         ele_t* aux = NULL;
         while(lista_iterador_tiene_siguiente(iterador)){
             aux = lista_iterador_siguiente(iterador);
-            free(aux->patente);
+            free(aux->clave);
             hash->destructor(aux);
         }
         lista_iterador_destruir(iterador);
@@ -224,7 +222,7 @@ size_t hash_con_cada_clave(hash_t* hash, bool (*funcion)(hash_t* hash, const cha
             ele_t* elem = NULL;
             while (lista_iterador_tiene_siguiente(iterador) && !corte){
                 elem = lista_iterador_siguiente(iterador);
-                corte = funcion(hash, elem->patente, aux);
+                corte = funcion(hash, elem->clave, aux);
                 cant++;
             }
             lista_iterador_destruir(iterador);
@@ -232,6 +230,10 @@ size_t hash_con_cada_clave(hash_t* hash, bool (*funcion)(hash_t* hash, const cha
         }
     }
     return cant;
+}
+
+vector_t *rehash(hash_t *hash){
+    
 }
 
 hash_iterador_t* hash_iterador_crear(hash_t* hash){
@@ -259,13 +261,25 @@ const char* hash_iterador_siguiente(hash_iterador_t* iterador){
     if(!iterador->lista){
         if(!iterador->hash->vector[iterador->posicion].lista){ 
             iterador->posicion++;
-            return NULL;
         }
         iterador->lista = iterador->hash->vector[iterador->posicion].lista;
         iterador->iterador_lista = lista_iterador_crear(iterador->lista);
     }
     iterador->sigue = lista_iterador_tiene_siguiente(iterador->iterador_lista);
+    if(!iterador->sigue){
+        lista_iterador_destruir(iterador->iterador_lista);
+        iterador->posicion++;
+        iterador->lista = iterador->hash->vector[iterador->posicion].lista;
+        iterador->iterador_lista = lista_iterador_crear(iterador->lista);
+        iterador->sigue = lista_iterador_tiene_siguiente(iterador->iterador_lista);
+    }
     iterador->elemento = (ele_t*)lista_iterador_siguiente(iterador->iterador_lista);
+    return (const char*)(iterador->elemento->clave);
+}
 
-    
+void hash_iterador_destruir(hash_iterador_t *iterador){
+    if(!iterador)
+        return;
+    free(iterador->iterador_lista);
+    free(iterador);
 }
